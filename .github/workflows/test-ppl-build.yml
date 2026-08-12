@@ -1,0 +1,40 @@
+name: test ppl-build
+
+on:
+  push:
+    paths:
+      - "src/ppl-build.cpp"
+      - ".github/workflows/test-ppl-build.yml"
+  pull_request:
+    paths:
+      - "src/ppl-build.cpp"
+      - ".github/workflows/test-ppl-build.yml"
+
+jobs:
+  compile-ppl-build:
+    name: compilar ppl-build.cpp
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: baixar código
+        uses: actions/checkout@v4
+
+      - name: instalar g++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++
+
+      - name: verificar versão do compilador
+        run: |
+          g++ --version
+
+      - name: compilar ppl-build
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Wpedantic \
+            src/ppl-build.cpp \
+            -o ppl-build
+
+      - name: verificar executável
+        run: |
+          test -x ppl-build
+          ./ppl-build --help
