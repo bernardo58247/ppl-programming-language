@@ -4,3 +4,4 @@ escolhas "hey" para escolhido (
  3: "Escolha 3"
  4: "Escolha 4"
 )
+mostrar "você escolheu: " escolhido
