@@ -258,4 +258,32 @@ public:
                             );
                         }
 
-                        std::ifstream
+                        std::ifstream arquivo_lib(
+                            caminho_resolvido
+                        );
+
+                        if (arquivo_lib.is_open()) {
+                            std::string codigo_lib(
+                                (
+                                    std::istreambuf_iterator<char>(
+                                        arquivo_lib
+                                    )
+                                ),
+                                std::istreambuf_iterator<char>()
+                            );
+
+                            arquivo_lib.close();
+
+                            executar(
+                                codigo_lib,
+                                escopo_local
+                            );
+                        } else {
+                            throw std::runtime_error(
+                                "falha ao abrir a biblioteca '" +
+                                caminho_resolvido +
+                                "'"
+                            );
+                        }
+                    } else {
+                        throw std::runtime
