@@ -15,11 +15,14 @@ void mostrar_uso() {
         << "  ppl-build <arquivo.ppls>\n"
         << "  ppl-build <arquivo.ppls> -o <saida>\n"
         << "  ppl-build <arquivo.ppls> --windows\n"
+        << "  ppl-build <arquivo.ppls> --linux\n"
         << "  ppl-build <arquivo.ppls> --windows -o <saida>\n"
+        << "  ppl-build <arquivo.ppls> --linux -o <saida>\n"
         << "\n"
         << "opções:\n"
         << "  -o <arquivo>    define o nome do executável de saída\n"
         << "  --windows       compila para windows\n"
+        << "  --linux         compila para linux\n"
         << "  -h, --help      mostra esta ajuda\n";
 }
 
@@ -43,6 +46,7 @@ int main(int argc, char* argv[]) {
     std::string saida;
 
     bool alvo_windows = false;
+    bool alvo_linux = false;
 
     /*
      * Processa os argumentos.
@@ -53,7 +57,7 @@ int main(int argc, char* argv[]) {
         std::string argumento = argv[i];
 
         /*
-         * ajuda
+         * Ajuda.
          */
 
         if (argumento == "-h" || argumento == "--help") {
@@ -62,7 +66,7 @@ int main(int argc, char* argv[]) {
         }
 
         /*
-         * saída personalizada
+         * Nome da saída.
          */
 
         if (argumento == "-o") {
@@ -80,16 +84,45 @@ int main(int argc, char* argv[]) {
         }
 
         /*
-         * cross-compilation para windows
+         * Forçar Windows.
          */
 
         if (argumento == "--windows") {
+
+            if (alvo_linux) {
+                std::cerr
+                    << "erro: --windows e --linux não podem "
+                    << "ser usados ao mesmo tempo.\n";
+
+                return 1;
+            }
+
             alvo_windows = true;
+
             continue;
         }
 
         /*
-         * primeiro argumento sem opção = arquivo .ppls
+         * Forçar Linux.
+         */
+
+        if (argumento == "--linux") {
+
+            if (alvo_windows) {
+                std::cerr
+                    << "erro: --windows e --linux não podem "
+                    << "ser usados ao mesmo tempo.\n";
+
+                return 1;
+            }
+
+            alvo_linux = true;
+
+            continue;
+        }
+
+        /*
+         * Primeiro argumento sem opção = arquivo .ppls.
          */
 
         if (arquivo_ppls.empty()) {
@@ -98,7 +131,7 @@ int main(int argc, char* argv[]) {
         }
 
         /*
-         * argumento desconhecido
+         * Argumento desconhecido.
          */
 
         std::cerr
@@ -110,10 +143,11 @@ int main(int argc, char* argv[]) {
     }
 
     /*
-     * Verifica se foi fornecido um arquivo.
+     * Verifica se foi informado um arquivo.
      */
 
     if (arquivo_ppls.empty()) {
+
         std::cerr
             << "erro: nenhum arquivo .ppls foi informado.\n";
 
@@ -127,6 +161,7 @@ int main(int argc, char* argv[]) {
      */
 
     if (!fs::exists(caminho_ppls)) {
+
         std::cerr
             << "erro: arquivo '"
             << arquivo_ppls
@@ -136,10 +171,11 @@ int main(int argc, char* argv[]) {
     }
 
     /*
-     * Verifica se é realmente um arquivo.
+     * Verifica se é um arquivo normal.
      */
 
     if (!fs::is_regular_file(caminho_ppls)) {
+
         std::cerr
             << "erro: '"
             << arquivo_ppls
@@ -153,94 +189,142 @@ int main(int argc, char* argv[]) {
      */
 
     if (caminho_ppls.extension() != ".ppls") {
+
         std::cerr
-            << "erro: o arquivo precisa possuir a extensão .ppls.\n";
+            << "erro: o arquivo precisa possuir "
+            << "a extensão .ppls.\n";
 
         return 1;
     }
 
     /*
-     * Detecta o sistema operacional.
-     *
-     * Se --windows foi usado, o alvo será Windows
-     * independentemente do sistema atual.
+     * Detecta o sistema operacional atual.
      */
 
-    std::string sistema;
-    std::string compilador;
+    std::string sistema_atual;
+
+#if defined(_WIN32)
+
+    sistema_atual = "windows";
+
+#elif defined(__linux__)
+
+    sistema_atual = "linux";
+
+#else
+
+    sistema_atual = "desconhecido";
+
+#endif
+
+    /*
+     * Define o alvo.
+     *
+     * Se nenhum alvo foi especificado,
+     * usa o sistema atual.
+     */
+
+    std::string sistema_alvo;
 
     if (alvo_windows) {
-
-        sistema = "windows";
-
-#if defined(_WIN32)
-
-        /*
-         * Estamos no próprio Windows.
-         */
-
-        compilador = "g++";
-
-#elif defined(__linux__)
-
-        /*
-         * Linux/Termux fazendo cross-compilation.
-         */
-
-        compilador = "x86_64-w64-mingw32-g++";
-
-#else
-
-        std::cerr
-            << "erro: não é possível fazer cross-compilation "
-            << "para windows neste sistema.\n";
-
-        return 1;
-
-#endif
-
-    } else {
-
-        /*
-         * Detecção automática do sistema.
-         */
-
-#if defined(_WIN32)
-
-        sistema = "windows";
-        compilador = "g++";
-
-#elif defined(__linux__)
-
-        sistema = "linux";
-        compilador = "g++";
-
-#else
-
-        std::cerr
-            << "erro: sistema operacional não suportado.\n";
-
-        return 1;
-
-#endif
-
+        sistema_alvo = "windows";
+    }
+    else if (alvo_linux) {
+        sistema_alvo = "linux";
+    }
+    else {
+        sistema_alvo = sistema_atual;
     }
 
     /*
-     * Define o nome da saída.
+     * Verifica se o sistema atual é suportado.
+     */
+
+    if (sistema_atual != "linux" &&
+        sistema_atual != "windows") {
+
+        std::cerr
+            << "erro: sistema operacional atual "
+            << "não suportado.\n";
+
+        return 1;
+    }
+
+    /*
+     * Define o compilador.
+     */
+
+    std::string compilador;
+
+    /*
+     * Linux → Linux
+     */
+
+    if (sistema_alvo == "linux" &&
+        sistema_atual == "linux") {
+
+        compilador = "g++";
+    }
+
+    /*
+     * Windows → Windows
+     */
+
+    else if (sistema_alvo == "windows" &&
+             sistema_atual == "windows") {
+
+        compilador = "g++";
+    }
+
+    /*
+     * Linux → Windows
+     */
+
+    else if (sistema_alvo == "windows" &&
+             sistema_atual == "linux") {
+
+        compilador = "x86_64-w64-mingw32-g++";
+    }
+
+    /*
+     * Windows → Linux
+     *
+     * Não existe um compilador universal que possamos
+     * assumir que esteja instalado no Windows.
+     *
+     * Tentamos usar x86_64-linux-gnu-g++.
+     */
+
+    else if (sistema_alvo == "linux" &&
+             sistema_atual == "windows") {
+
+        compilador = "x86_64-linux-gnu-g++";
+    }
+
+    else {
+
+        std::cerr
+            << "erro: combinação de sistema e alvo "
+            << "não suportada.\n";
+
+        return 1;
+    }
+
+    /*
+     * Define o nome padrão do executável.
      */
 
     if (saida.empty()) {
 
         saida = caminho_ppls.stem().string();
 
-        if (sistema == "windows") {
+        if (sistema_alvo == "windows") {
             saida += ".exe";
         }
     }
 
     /*
-     * Lê o arquivo PPL.
+     * Lê o código PPL.
      */
 
     std::ifstream arquivo(caminho_ppls);
@@ -266,7 +350,7 @@ int main(int argc, char* argv[]) {
     /*
      * Obtém o diretório temporário do sistema.
      *
-     * Linux/Termux:
+     * Linux / Termux:
      *     normalmente /tmp
      *
      * Windows:
@@ -277,9 +361,11 @@ int main(int argc, char* argv[]) {
 
     try {
 
-        diretorio_temp = fs::temp_directory_path();
+        diretorio_temp =
+            fs::temp_directory_path();
 
-    } catch (const fs::filesystem_error& erro) {
+    }
+    catch (const fs::filesystem_error& erro) {
 
         std::cerr
             << "erro: não foi possível localizar "
@@ -291,15 +377,25 @@ int main(int argc, char* argv[]) {
     }
 
     /*
-     * Cria o nome do .cpp temporário.
+     * Cria o caminho do C++ temporário.
      */
 
     fs::path arquivo_temporario =
         diretorio_temp / gerar_nome_temporario();
 
     std::cout
+        << "sistema atual: "
+        << sistema_atual
+        << "\n";
+
+    std::cout
         << "sistema alvo: "
-        << sistema
+        << sistema_alvo
+        << "\n";
+
+    std::cout
+        << "compilador: "
+        << compilador
         << "\n";
 
     std::cout
@@ -308,7 +404,7 @@ int main(int argc, char* argv[]) {
         << "\n";
 
     /*
-     * Cria o C++ temporário.
+     * Cria o arquivo C++ temporário.
      */
 
     std::ofstream cpp(arquivo_temporario);
@@ -316,7 +412,8 @@ int main(int argc, char* argv[]) {
     if (!cpp.is_open()) {
 
         std::cerr
-            << "erro: não foi possível criar o arquivo temporário:\n"
+            << "erro: não foi possível criar "
+            << "o arquivo temporário:\n"
             << arquivo_temporario
             << "\n";
 
@@ -324,7 +421,7 @@ int main(int argc, char* argv[]) {
     }
 
     /*
-     * Código inicial do programa gerado.
+     * Cabeçalhos do programa gerado.
      */
 
     cpp << R"CPP(
@@ -341,17 +438,13 @@ int main(int argc, char* argv[]) {
  * PPL BUILD
  *
  * O InterpretadorPPL será incorporado aqui
- * quando o interpretador for separado do main()
- * do ppl.cpp.
+ * na versão final do ppl-build.
  */
 
 )CPP";
 
     /*
-     * Código PPL embutido.
-     *
-     * raw string permite preservar praticamente
-     * qualquer conteúdo do arquivo .ppls.
+     * Código PPL.
      */
 
     cpp << R"CPP(
@@ -366,8 +459,8 @@ int main() {
 )PPL_CODE";
 
     /*
-     * Temporariamente apenas informa que o
-     * interpretador ainda precisa ser incorporado.
+     * Temporariamente o interpretador ainda
+     * não está incorporado.
      */
 
     std::cerr
@@ -408,7 +501,7 @@ int main() {
         std::system(comando.c_str());
 
     /*
-     * Remove o .cpp temporário.
+     * Remove o C++ temporário.
      */
 
     std::error_code erro_remocao;
@@ -428,7 +521,7 @@ int main() {
     }
 
     /*
-     * Verifica o resultado da compilação.
+     * Verifica a compilação.
      */
 
     if (resultado != 0) {
